@@ -1,12 +1,26 @@
 import os
 
 import sublime, sublime_plugin
-from urllib import urlencode, urlopen
+from urllib.parse import urlencode
+from urllib.request import urlopen
 
-PASTEBIN_URL = "http://pastebin.com/api/api_post.php"	
 
-class SendToPasteBinPromptCommand( sublime_plugin.WindowCommand):
-	
+def plugin_loaded():
+
+	global pref
+
+	class Pref:
+		pastebin_url     = "http://pastebin.com/api/api_post.php"
+		settings         = sublime.load_settings("SendToPasteBin.sublime-settings")
+		api_dev_key      = settings.get("api_dev_key")
+		api_user_key     = settings.get("api_user_key")
+		paste_privacy    = settings.get("paste_privacy")
+		paste_expiration = settings.get("paste_expiration")
+
+	pref = Pref()
+
+class SendToPasteBinPromptCommand(sublime_plugin.WindowCommand):
+
 	def run(self):
 		self.window.show_input_panel("Paste Name:", "", self.on_done, None, None)
 
@@ -81,30 +95,28 @@ class SendToPasteBinCommand( sublime_plugin.TextCommand ):
 			paste_name = self.view.file_name()				# Get full file name (Path + Base Name)
 
 			if paste_name is not  None: 					# Check if file exists on disk
-				paste_name = 	os.path.basename(paste_name)	# Extract base name
+				paste_name = os.path.basename(paste_name)	# Extract base name
 			else:
 				paste_name = "Untitled"
 
 		for region in self.view.sel():
 
 			syntax = syntaxes.get(self.view.settings().get('syntax').split('/')[-1], 'text')
-
-			text = self.view.substr(region).encode('utf8')
+			text = self.view.substr(region)
 
 			if not text:
 				sublime.status_message('Error sending to PasteBin: Nothing selected')
 			else:
 				args = {
-					'api_dev_key': '9defe36b1e886d4c35f7e6383095ac1e',
+					'api_dev_key': pref.api_dev_key,
+					'api_user_key': pref.api_user_key,
 					'api_paste_code': text,
-					'api_paste_private': '1',
+					'api_paste_private': pref.paste_privacy,
 					'api_option': 'paste',
 					'api_paste_format': syntax,
 					'api_paste_name': paste_name,
-					'api_paste_expire_date': '1D'
+					'api_paste_expiration': pref.paste_expiration
 				}
-
-				response = urlopen(url=PASTEBIN_URL, data=urlencode(args)).read()
-
+				response = urlopen(url=pref.pastebin_url, data=urlencode(args).encode("utf8")).read().decode('utf8')
 				sublime.set_clipboard(response)
 				sublime.status_message('PasteBin URL copied to clipboard: ' + response)
